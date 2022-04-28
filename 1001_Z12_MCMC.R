@@ -14,13 +14,16 @@ rm(list=ls())
 
 ###read the params
 
+# If you are running multiple runs in compute cluster:
 TASKID <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID', 0))
 pars=scan(file = '1001_pars.txt',what = "",skip = TASKID, nlines = 1)
+# pars: Y array, covariates X, Hstar,rho_mu,rho_ab,k,a1, a2.
 #pars=c("0927Y_arr_42.RData","0927Z12t_top18_2006Q4_2016Q3.RData",5,0.5,0.5,0.1,2,2,"EU","Quarter")
 #prepare
 
 # Naive sampler for PG(1, z)
 # (based on the finite approximation of infinite sum)
+# can replace this using rpg function from the package BayesLogit
 rpg_naive = function(z, n_terms = 100){
   g = rexp(n_terms, 1)
   out = 1 / (2*(pi^2)) * sum(g / ((1:n_terms - 1/2)^2 + z^2 / (4*(pi^2))))
@@ -29,10 +32,13 @@ rpg_naive = function(z, n_terms = 100){
 
 ## Read data
 
+# read Y array
 load(pars[1])
+# read X
 load(pars[2])
-
+# number of nodes
 V=dim(Y_arr)[1]
+# number of time points
 N=dim(Y_arr)[3]
 
 Y_arr[,,N]=NA #Y_{40} a matrix of missing values
@@ -58,8 +64,6 @@ now=proc.time()
 logFile =paste0(TASKID,"1001log_file.txt")
 cat(paste0(0,",",now[3]), file=logFile, append=FALSE, sep = "\n")
 
-#MCMCme=function(N=40,V=15,H_star=10,k_u0=0.05,k_x0=0.05,a1=2,a2=2,niter=5000,burnin=1000,Y_arr=Y_arr){
-#p = progress_estimated(niter, min_time = 0)
 
 ##prior
 c_u0=corr_matrix(X = 1:N,beta = log10(k_u0),corr = list(type="exponential",power=2))
@@ -231,19 +235,19 @@ for (iter in 1:niter){
   }
   diag(Y_arr[,,N])=NA
   Y_arrN_cache[,,iter]=Y_arr[,,N]
+  # track the number of iterations
 if (iter%%100==0){
   cat(paste0(iter,",",proc.time()[3]), file=logFile, append=TRUE, sep = "\n")
 }
+  # save file every 5000 iterations
   if (iter%%5000==0){
     save.image(paste0("1001_TASKID",TASKID,"_code",pars[9],"_iter",iter,"_a1_",a1,"_Hstar",H_star,"_rho_x0",rho_x0,"_rho_ab0",rho_ab0,"_k0_",k_x0,".RData"),compress = "xz")
   }
 }
-#MCMCres=list(mu_est=mu_cache,pi_est=pi_arr_est_cache)
-#save(MCMCres,file="MCMCres_asys_seed2_456.RData")
-#return(MCMCres)
-#}
 
-#givemeMCMC=MCMCme(N=40,V=15,H_star=10,k_u0=0.05,k_x0=0.05,a1=2,a2=2,niter=5000,burnin=1000,Y_arr=Y_arr)
+# compute time
 future=proc.time()
 tictoc=future-now
+
+# save files
 save.image(paste0("1001_TASKID",TASKID,"_code",pars[9],"_iter",iter,"_a1_",a1,"_Hstar",H_star,"_rho_x0",rho_x0,"_rho_ab0",rho_ab0,"_k0_",k_x0,".RData"),compress = "xz")
